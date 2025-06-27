@@ -1,0 +1,34 @@
+import time
+from concurrent.futures import ThreadPoolExecutor
+
+def noisy_function(name):
+    """A function that announces when it starts and finishes"""
+    print(f"STARTED: {name} at {time.time():.2f}")
+    time.sleep(2)  # Do some work
+    print(f"FINISHED: {name} at {time.time():.2f}")
+    return f"Result from {name}"
+
+with ThreadPoolExecutor(max_workers=2) as executor:
+    print(f"About to submit tasks at {time.time():.2f}")
+    
+    # These submit() calls start the work immediately
+    future1 = executor.submit(noisy_function, "Task 1")
+    print(f"Submitted Task 1 at {time.time():.2f}")
+    
+    future2 = executor.submit(noisy_function, "Task 2")  
+    print(f"Submitted Task 2 at {time.time():.2f}")
+    
+    print("Both tasks are now running in the background!")
+    print("Let me do some other work while they run...")
+    
+    # Do some other work while the functions run
+    time.sleep(1)
+    print(f"Did some other work at {time.time():.2f}")
+    
+    # NOW we collect the results
+    print("Now collecting results...")
+    result1 = future1.result()  # This might wait if not done yet
+    print(f"Got result1: {result1}")
+    
+    result2 = future2.result()  # This might be ready immediately
+    print(f"Got result2: {result2}")

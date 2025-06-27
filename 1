@@ -1,0 +1,40 @@
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
+def variable_work(seconds, task_name):
+    """A function that takes different amounts of time"""
+    print(f"Starting {task_name} (will take {seconds} seconds)")
+    time.sleep(seconds)
+    print(f"Finished {task_name}")
+    return f"Result from {task_name}"
+
+
+with ThreadPoolExecutor(max_workers=3) as executor:
+    # Submit tasks that will finish in reverse order
+    futures = []
+    futures.append(executor.submit(variable_work, 3, "Slow Task"))  # Takes 3 seconds
+    futures.append(executor.submit(variable_work, 2, "Medium Task"))  # Takes 2 seconds
+    futures.append(executor.submit(variable_work, 1, "Fast Task"))  # Takes 1 second
+    print()
+    print("All tasks submitted, now let's see the difference...")
+    print()
+    print(futures)
+    # Method 1: Process futures in submission order
+    print("Results in SUBMISSION order:")
+    for i, future in enumerate(futures):
+        result = future.result()  # This will wait for each task in order
+        print(f"Position {i}: {result}")
+
+    print()
+
+    # If we run it again with as_completed:
+    futures = []
+    futures.append(executor.submit(variable_work, 3, "Slow Task"))
+    futures.append(executor.submit(variable_work, 2, "Medium Task"))
+    futures.append(executor.submit(variable_work, 1, "Fast Task"))
+
+    print("Results in COMPLETION order:")
+    for future in as_completed(futures):
+        result = future.result()  # This gets results as soon as they're ready
+        print(f"Got: {result}")
