@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ThreadPoolExecutor.map() Visualization</title>
+    <style>
+      body {
+        background-color: #1e1e1e;
+        color: #d4d4d4;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        flex-direction: column;
+      }
+      canvas {
+        background-color: #252526;
+        border: 1px solid #3e3e3e;
+      }
+      h1 {
+        margin-bottom: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>ThreadPoolExecutor.map() for-loop Visualization</h1>
+    <canvas id="animationCanvas" width="1000" height="600"></canvas>
+
+    <script>
+      const canvas = document.getElementById("animationCanvas");
+      const ctx = canvas.getContext("2d");
+
+      // --- Configuration ---
+      const COLORS = {
+        IDLE: "#3a3d41",
+        WORKING: "#5e4a00",
+        DONE: "#004d1a",
+        BLOCKED: "#6e0000",
+        RUNNING: "#004e8a",
+        TEXT: "#d4d4d4",
+        TEXT_DARK: "#1e1e1e",
+        PROGRESS: "#f9a602",
+        RESULT: "#4ec9b0",
+      };
+
+      const DATA = [3, 1, 2];
+      const MAX_WORKERS = 3;
+
+      // --- State Objects ---
+      let time = 0;
+      let mainThread = {
+        state: "Running",
+        text: "Executing executor.map()",
+        color: COLORS.RUNNING,
+      };
+      let workers = [];
+      for (let i = 0; i < MAX_WORKERS; i++) {
+        workers.push({ id: i + 1, state: "Idle", task: null, progress: 0 });
+      }
+      let results = [];
+      let animationStarted = false;
+
+      // --- Drawing Utilities ---
+      function drawBox(
+        x,
+        y,
+        width,
+        height,
+        color,
+        text,
+        subtext = "",
+        textColor = COLORS.TEXT
+      ) {
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, width, height);
+
+        ctx.fillStyle = textColor;
+        ctx.font = "bold 16px Segoe UI";
+        ctx.textAlign = "center";
+        ctx.fillText(text, x + width / 2, y + 30);
+
+        if (subtext) {
+          ctx.font = "14px Segoe UI";
+          ctx.fillText(subtext, x + width / 2, y + 55);
+        }
+      }
+
+      function drawProgressBar(x, y, width, height, progress) {
+        ctx.fillStyle = "#1e1e1e";
+        ctx.fillRect(x, y, width, height);
+        ctx.fillStyle = COLORS.PROGRESS;
+        ctx.fillRect(x, y, width * progress, height);
+        ctx.strokeStyle = "#d4d4d4";
+        ctx.strokeRect(x, y, width, height);
+      }
+
+      // --- Main Drawing Function ---
+      function draw() {
+        // Clear canvas
+        ctx.fillStyle = "#252526";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Draw Title
+        ctx.fillStyle = COLORS.TEXT;
+        ctx.font = "bold 20px Segoe UI";
+        ctx.textAlign = "center";
+        ctx.fillText("Main Thread", 250, 50);
+        ctx.fillText("ThreadPoolExecutor (max_workers=3)", 700, 50);
+
+        // Draw Main Thread
+        drawBox(
+          100,
+          80,
+          300,
+          80,
+          mainThread.color,
+          mainThread.state,
+          mainThread.text
+        );
+
+        // Draw Results Box
+        drawBox(100, 200, 300, 300, COLORS.IDLE, "Results");
+        ctx.fillStyle = COLORS.RESULT;
+        ctx.font = "16px Consolas";
+        ctx.textAlign = "left";
+        results.forEach((res, i) => {
+          ctx.fillText(res, 120, 240 + i * 25);
+        });
+
+        // Draw Workers
+        workers.forEach((worker, i) => {
+          const yPos = 80 + i * 120;
+          let workerState = worker.state;
+          let workerSubtext = "";
+          let color = COLORS.IDLE;
+
+          if (worker.task) {
+            workerSubtext = `Working on Task(${worker.task.value}s)`;
+            color = worker.state === "Done" ? COLORS.DONE : COLORS.WORKING;
+            workerState = worker.state;
+          }
+
+          drawBox(
+            550,
+            yPos,
+            300,
+            100,
+            color,
+            `Worker ${worker.id}`,
+            workerState
+          );
+          if (worker.task) {
+            drawProgressBar(575, yPos + 60, 250, 20, worker.progress);
+          }
+        });
+
+        // Draw Timeline
+        ctx.font = "bold 24px Segoe UI";
+        ctx.fillStyle = COLORS.TEXT;
+        ctx.textAlign = "center";
+        ctx.fillText(
+          `Time: ${time.toFixed(1)}s`,
+          canvas.width / 2,
+          canvas.height - 30
+        );
+      }
+
+      // --- Animation Update Logic ---
+      function update(deltaTime) {
+        if (!animationStarted) return;
+        time += deltaTime;
+
+        // 1. Assign tasks and block main thread
+        if (time > 0.1 && workers[0].state === "Idle") {
+          for (let i = 0; i < DATA.length; i++) {
+            workers[i].state = "Working";
+            workers[i].task = { value: DATA[i], startTime: time };
+          }
+          mainThread = {
+            state: "BLOCKED",
+            text: `Waiting for Result of Task(${DATA[0]}s)`,
+            color: COLORS.BLOCKED,
+          };
+        }
+
+        // 2. Update worker progress
+        workers.forEach((worker) => {
+          if (worker.task && worker.state !== "Done") {
+            const elapsedTime = time - worker.task.startTime;
+            worker.progress = Math.min(1, elapsedTime / worker.task.value);
+            if (worker.progress >= 1) {
+              worker.state = "Done";
+            }
+          }
+        });
+
+        // 3. Check for unblocking and result collection
+        const firstWorker = workers[0];
+        if (mainThread.state === "BLOCKED" && firstWorker.state === "Done") {
+          mainThread = {
+            state: "Running",
+            text: "Collecting results...",
+            color: COLORS.RUNNING,
+          };
+          // Collect all results in order, now that the first one is ready
+          DATA.forEach((val) => {
+            results.push(`> Received 'Result of ${val}'`);
+          });
+          // Stop the animation from re-triggering this block
+          mainThread.state = "Finished";
+          mainThread.text = "Loop Complete";
+        }
+      }
+
+      let lastTime = 0;
+      function animate(timestamp) {
+        const deltaTime = (timestamp - lastTime) / 1000;
+        lastTime = timestamp;
+
+        update(deltaTime);
+        draw();
+
+        if (time < 8) {
+          // Run animation for 8 seconds
+          requestAnimationFrame(animate);
+        }
+      }
+
+      // Start after a brief moment
+      setTimeout(() => {
+        animationStarted = true;
+        lastTime = performance.now();
+        requestAnimationFrame(animate);
+      }, 500);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,67 @@
+from concurrent.futures import ThreadPoolExecutor
+import time
+import threading
+import sys
+
+def demonstrate_result_storage():
+    """Shows where and how results accumulate in memory"""
+    
+    def variable_duration_work(task_info):
+        """Work that takes different amounts of time to show out-of-order completion"""
+        task_id, duration = task_info
+        worker_name = threading.current_thread().name
+        
+        print(f"    🚀 Worker {worker_name} started task {task_id} (duration: {duration}s)")
+        time.sleep(duration)
+        
+        # Create a "large" result to make memory usage visible
+        large_result = {
+            'task_id': task_id,
+            'worker': worker_name,
+            'data': list(range(100000)),  # Large data to see memory impact
+            'timestamp': time.time()
+        }
+        
+        print(f"    ✅ Worker {worker_name} finished task {task_id} - result stored in buffer")
+        return large_result
+    
+    # Tasks with different durations - some will finish out of order
+    tasks = [
+        (1, 3.0),  # Task 1: 3 seconds (slowest)
+        (2, 1.0),  # Task 2: 1 second 
+        (3, 1.5),  # Task 3: 1.5 seconds
+        (4, 0.5),  # Task 4: 0.5 seconds (fastest)
+        (5, 2.0),  # Task 5: 2 seconds
+    ]
+    
+    print("🧪 DEMONSTRATING INTERNAL RESULT STORAGE")
+    print("=" * 60)
+    print("Tasks will complete out of order, but results must be delivered in order")
+    print("This means results will accumulate in an internal buffer!")
+    
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        start_time = time.time()
+        
+        result_iterator = executor.map(variable_duration_work, tasks)
+        print(f"Iterator created at {start_time:.2f}")
+        print("Work started on first 3 tasks immediately")
+        
+        # Let work progress and accumulate results
+        print(f"\n⏰ Waiting 2 seconds to let results accumulate...")
+        time.sleep(2)
+        current_time = time.time()
+        print(f"Current time: {current_time:.2f}")
+        print("Several tasks have finished, results are buffered internally!")
+        
+        # Now consume results one by one and see the order
+        print(f"\n📥 Starting to consume results at {current_time:.2f}")
+        for i, result in enumerate(result_iterator):
+            consumption_time = time.time()
+            print(f"Consumed result {i+1}: Task {result['task_id']} at {consumption_time:.2f}")
+            
+            # Add delay between consumption to see buffering effect
+            if i < len(tasks) - 1:
+                time.sleep(0.5)
+                print(f"   (Other completed results are waiting in buffer...)")
+
+demonstrate_result_storage()
